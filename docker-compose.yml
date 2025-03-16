@@ -1,0 +1,72 @@
+services:
+  mongodb:
+    image: mongo:6.0
+    container_name: qb-voice-invoice-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=quickbooks-voice-invoice
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: qb-voice-invoice-backend
+    ports:
+      - "3000:3000"
+    volumes:
+      # Only mount source code, not node_modules
+      - ./backend/src:/app/src
+      - ./backend/package.json:/app/package.json
+      - ./backend/package-lock.json:/app/package-lock.json
+      - ./.env:/app/.env
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - MONGODB_URI=mongodb://mongodb:27017/quickbooks-voice-invoice
+      - FRONTEND_URL=http://localhost:8081
+      - CORS_ORIGIN=http://localhost:8081
+      - JWT_SECRET=your_jwt_secret_here
+      - JWT_EXPIRES_IN=24h
+      - ENCRYPTION_KEY=your_32_byte_encryption_key_here
+      - QB_CLIENT_ID=your_quickbooks_client_id_here
+      - QB_CLIENT_SECRET=your_quickbooks_client_secret_here
+      - QB_REDIRECT_URI=http://localhost:8081/auth/qbo/callback
+      - QB_ENVIRONMENT=sandbox
+      - RATE_LIMIT_WINDOW_MS=900000
+      - RATE_LIMIT_MAX=100
+      - OPENAI_API_KEY=your_openai_api_key_here
+    depends_on:
+      - mongodb
+    networks:
+      - app-network
+    command: npm run dev
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+    container_name: qb-voice-invoice-frontend
+    ports:
+      - "8081:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - backend
+    networks:
+      - app-network
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
